@@ -42,7 +42,7 @@ def heic_to_png(directory):
     threads = []
     for root, dirs, files in os.walk(directory):
         for file in files:
-            if file.endswith('.HEIC'):
+            if file.endswith('.HEIC') and not os.path.isfile(os.path.join(root, 'PNG', file[:-5] + '.png')):
                 t = threading.Thread(target=convert_to_png, args=(file, root, progress_bar))
                 t.start()
                 threads.append(t)
@@ -65,7 +65,7 @@ def heic_to_jpeg(directory):
     threads = []
     for root, dirs, files in os.walk(directory):
         for file in files:
-            if file.endswith('.HEIC'):
+            if file.endswith('.HEIC') and not os.path.isfile(os.path.join(root, 'JPEG', file[:-5] + '.jpg')):
                 t = threading.Thread(target=convert_to_jpg, args=(file, root, progress_bar))
                 t.start()
                 threads.append(t)
