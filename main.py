@@ -1,109 +1,71 @@
 from PIL import Image
 import pillow_heif
 import os
-import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from progress.bar import IncrementalBar
 
 
-def convert_to_png(image_name, folder, progress_bar):
+def convert_heic(image_name, folder, output_format, progress_bar):
+    output_folder = os.path.join(folder, output_format)
+    os.makedirs(output_folder, exist_ok=True)
+    output_name = f"{os.path.splitext(image_name)[0]}.{output_format.lower()}"
+    output_path = os.path.join(output_folder, output_name)
+
+    if os.path.exists(output_path):  # Пропускаем, если уже конвертировано
+        progress_bar.next()
+        return
+
     pillow_heif.register_heif_opener()
-    image = Image.open(f'{folder}/{image_name}')
-    image_name = f'{image_name[:-5]}.png'
-    image.save(os.path.join(folder, 'PNG', image_name), format('PNG'))
+    image = Image.open(os.path.join(folder, image_name))
+    image.save(output_path, output_format.upper())
     progress_bar.next()
 
 
-def convert_to_jpg(image_name, folder, progress_bar):
-    heif_file = pillow_heif.read_heif(f'{folder}/{image_name}')
-    image = Image.frombytes(
-        heif_file.mode,
-        heif_file.size,
-        heif_file.data,
-        "raw",
-    )
-    image_name = f'{image_name[:-5]}.jpg'
-    image.save(os.path.join(folder, 'JPEG', image_name), format('JPEG'))
-    progress_bar.next()
+def convert_heic_files(directory, output_format):
+    output_folder = os.path.join(directory, output_format)
+    os.makedirs(output_folder, exist_ok=True)
 
+    files = [file for file in os.listdir(directory) if file.lower().endswith('.heic')]
+    if not files:
+        print("No HEIC files found.")
+        return
 
-def heic_to_png(directory):
-    if not os.path.exists(f'{directory}/PNG'):
-        os.mkdir(f'{directory}/PNG')
+    progress_bar = IncrementalBar('Progress', max=len(files))
 
-    count_of_files = 0
-    for root, dirs, files in os.walk(directory):
+    with ThreadPoolExecutor() as executor:
         for file in files:
-            if file.endswith('.HEIC'):
-                count_of_files += 1
+            executor.submit(convert_heic, file, directory, output_format, progress_bar)
 
-    progress_bar = IncrementalBar('Progress', max=count_of_files)
-
-    threads = []
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            if file.endswith('.HEIC') and not os.path.isfile(os.path.join(root, 'PNG', file[:-5] + '.png')):
-                t = threading.Thread(target=convert_to_png, args=(file, root, progress_bar))
-                t.start()
-                threads.append(t)
-    for t in threads:
-        t.join()
     progress_bar.finish()
-
-def heic_to_jpeg(directory):
-    if not os.path.exists(f'{directory}/JPEG'):
-        os.mkdir(f'{directory}/JPEG')
-
-    count_of_files = 0
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            if file.endswith('.HEIC'):
-                count_of_files += 1
-
-    progress_bar = IncrementalBar('Progress', max=count_of_files)
-
-    threads = []
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            if file.endswith('.HEIC') and not os.path.isfile(os.path.join(root, 'JPEG', file[:-5] + '.jpg')):
-                t = threading.Thread(target=convert_to_jpg, args=(file, root, progress_bar))
-                t.start()
-                threads.append(t)
-    for t in threads:
-        t.join()
-    progress_bar.finish()
+    print(f"Finished! The results are saved in {output_folder}")
 
 
 def main():
     while True:
-        directory = input("Enter path to folder with your photos:\n")
-        if os.path.exists(directory):
+        directory = input("Enter path to folder with your photos:\n").strip()
+        if os.path.isdir(directory):
             break
+        print("Invalid path. Try again.")
+
     print("Choose the converting mode:\n1. HEIC to PNG (high quality, slower)\n2. HEIC to JPEG (low quality, faster)")
-    mode = 0
 
     while True:
         try:
             mode = int(input())
+            if mode in (1, 2):
+                break
         except ValueError:
-            continue
-        if mode not in (1, 2):
-            continue
-        break
+            pass
+        print("Invalid choice. Enter 1 or 2.")
 
     t1 = time.time()
-    if mode == 1:
-        heic_to_png(directory)
-        print(f"Finished! The results are saved in {directory}/PNG")
-    elif mode == 2:
-        heic_to_jpeg(directory)
-        print(f"Finished! The results are saved in {directory}/JPEG")
-    else:
-        print("Unexpected error")
+    format_map = {1: "PNG", 2: "JPEG"}
+    convert_heic_files(directory, format_map[mode])
     t2 = time.time()
 
-    print("Consumed time: %.2f seconds"%(t2 - t1))
-    input("\nPress enter to continue")
+    print(f"Consumed time: {t2 - t1:.2f} seconds")
+    input("\nPress enter to exit")
 
 
 if __name__ == "__main__":
